@@ -1,0 +1,173 @@
+package all53e;
+import java.net.*;
+import java.io.*;
+
+public class TimedSocket
+{
+	public static Socket getSocket ( byte [] host, int port, int delay) throws InterruptedIOException, IOException
+	{
+		Socket sock = null;
+		// Create a new socket thread, and start it running
+		SocketThread st = new SocketThread( host, port );
+		st.start();
+        sock = SeeSocket ( st, delay );
+
+        return sock;
+    }
+	public static Socket getSocket ( String host, int port, int delay) throws InterruptedIOException, IOException
+	{
+		Socket sock = null;
+		// Create a new socket thread, and start it running
+		SocketThread st = new SocketThread( host, port );
+		st.start();
+        sock = SeeSocket ( st, delay );
+        
+        return sock;
+    }
+    private static Socket SeeSocket ( SocketThread st, int delay ) throws InterruptedIOException, IOException
+    {
+		int timer = 0;
+		Socket sock = null;
+
+		for (;;)
+		{
+			// Check to see if a connection is established
+			if (st.isConnected())
+			{
+				// Yes ...  assign to sock variable, and break out of loop
+				sock = st.getSocket();
+				break;
+			}
+			else
+			{
+				// Check to see if an error occurred
+				if (st.isError())
+				{
+					// No connection could be established
+					throw (st.getException());
+				}
+
+				try
+				{
+					// Sleep for a short period of time
+					Thread.sleep ( POLL_DELAY );
+				}
+				catch (InterruptedException ie) {}
+
+				// Increment timer
+				timer += POLL_DELAY;
+
+				// Check to see if time limit exceeded
+				if (timer > delay )
+				{
+					// Can't connect to server
+					throw new InterruptedIOException("Could not connect for " + delay + " milliseconds");
+				}
+			}
+		}
+
+		return sock;
+	}
+
+	// Inner class for establishing a socket thread
+	// within another thread, to prevent blocking.
+	static class SocketThread extends Thread
+	{
+		// Socket connection to remote host
+		volatile private Socket m_connection = null;
+		// Hostname to connect to
+		private String m_host       = null;
+		// Internet Address to connect to
+        private InetAddress m_inet = null;
+		// Port number to connect to
+		private int    m_port       = 0;
+		// Exception in the event a connection error occurs
+		private IOException m_exception = null;
+
+		// Connect to the specified host and port number
+		public SocketThread ( String host, int port)
+		{
+			// Assign to member variables
+			m_host = host;
+			m_port = port;
+		}
+		public SocketThread ( byte[] host, int port)
+		{
+            try
+            {
+                m_inet = InetAddress.getByAddress( host );
+                m_port = port;
+            }
+			catch (IOException ioe)
+			{
+			}
+		}
+
+		public void run()
+		{
+			// Socket used for establishing a connection
+			Socket sock = null;
+
+			try
+			{
+                // Sleep for a short period of time
+                Thread.sleep ( POLL_DELAY );
+				// Was a string or an inet specified
+				if (m_host != null)
+				{
+					// Connect to a remote host - BLOCKING I/O
+					sock = new Socket (m_host, m_port);
+				}
+                else
+                {
+					// Connect to a remote host - BLOCKING I/O
+					sock = new Socket (m_inet, m_port);
+                }
+			}
+			catch (IOException ioe)
+			{
+				// Assign to our exception member variable
+				m_exception = ioe;
+				return;
+			}
+            catch (InterruptedException ie) {}
+
+			// If socket constructor returned without error,
+			// then connection finished
+			m_connection = sock;
+		}
+
+		// Are we connected?
+		public boolean isConnected()
+		{
+			if (m_connection == null)
+				return false;
+			else
+				return true;
+		}
+
+		// Did an error occur?
+		public boolean isError()
+		{
+			if (m_exception == null)
+				return false;
+			else
+				return true;
+		}
+
+		// Get socket
+		public Socket getSocket()
+		{
+			return m_connection;
+		}
+
+		// Get exception
+		public IOException getException()
+		{
+			return m_exception;
+		}
+	}
+
+	// Polling delay for socket checks (in milliseconds)
+	private static final int POLL_DELAY = 100;
+}
